@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nomad Go | Happy New Year ❄️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;900&display=swap');
+        body { font-family: 'Montserrat', sans-serif; background: #011420; color: #1e293b; margin: 0; overflow-x: hidden; }
+        
+        /* Стили для мелких смайликов на фоне */
+        #snow-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+        .tiny-emoji { position: absolute; opacity: 0.15; animation: float-around 15s infinite ease-in-out; user-select: none; }
+        @keyframes float-around { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 33% { transform: translate(15px, -20px) rotate(10deg); } 66% { transform: translate(-10px, 10px) rotate(-10deg); } }
+
+        /* Светлая карта с новогодней рамкой */
+        #map { height: 450px; width: 100%; border-radius: 30px; border: 6px solid #fff; background: #e2e8f0; box-shadow: 0 10px 40px rgba(59, 130, 246, 0.2); position: relative; z-index: 10; }
+        .glass-card { background: rgba(255, 255, 255, 0.952); backdrop-filter: blur(15px); border: 1px solid rgba(1, 2, 31, 0.8); border-radius: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.05); position: relative; z-index: 10; }
+        .cat-btn { transition: 0.3s; opacity: 0.7; cursor: pointer; font-size: 9px; font-weight: 900; text-transform: uppercase; padding: 10px; border-radius: 12px; color: rgb(255, 255, 255); }
+        .cat-btn.active { opacity: 1; border: 2px solid #1e293b; transform: scale(1.05); }
+        .btn-main { background: linear-gradient(45deg, #3b82f6, #1d4ed8); box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3); color: white; }
+        .map-label { color: #1e293b; padding: 4px 10px; border-radius: 10px; font-weight: 900; font-size: 10px; border: 2px solid #1e293b; background: white; white-space: nowrap; }
+        .user-dot { width: 20px; height: 20px; background: #ef4444; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); position: relative; }
+        .leaflet-control-attribution, .leaflet-routing-container { display: none !important; }
+        h1 { background: linear-gradient(to bottom, #fff 20%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; position: relative; z-index: 10; }
+    </style>
+</head>
+<body class="p-4 md:p-6">
+
+    <div id="snow-container"></div>
+
+    <div class="max-w-7xl mx-auto relative z-10">
+        <header class="text-center mb-6">
+            <h1 class="text-4xl font-black italic uppercase tracking-tight">
+                Neo Nomad❄
+            </h1>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-4 space-y-4">
+                <div class="glass-card p-6 shadow-2xl border-t-4 border-blue-400">
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Старт:</label>
+                            <input id="startInput" type="text" class="w-full p-4 bg-white/50 border border-blue-100 rounded-2xl outline-none text-sm text-slate-800" placeholder="Откуда?">
+                            <button id="gpsBtn" onclick="toggleGPS()" class="absolute right-2 top-8 bg-blue-500 p-2 rounded-xl text-white">🛰️</button>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-black uppercase text-gray-400 ml-1">Финиш:</label>
+                            <input id="endInput" type="text" class="w-full p-4 bg-white/50 border border-blue-100 rounded-2xl outline-none text-sm text-slate-800" placeholder="Куда едем?">
+                        </div>
+                    </div>
+
+                    <div class="mt-6 grid grid-cols-3 gap-2">
+                        <button onclick="toggleCat('tourism', 'ГИД', '#3b82f6', this)" class="cat-btn active bg-blue-500">🏛️ Гид</button>
+                        <button onclick="toggleCat('hotel', 'СОН', '#a855f7', this)" class="cat-btn bg-purple-500">🏨 Сон</button>
+                        <button onclick="toggleCat('park', 'ПАРК', '#22c55e', this)" class="cat-btn bg-green-500">🌳 Парк</button>
+                        <button onclick="toggleCat('hospital', 'SOS', '#10b981', this)" class="cat-btn bg-emerald-500">🏥 SOS</button>
+                        <button onclick="toggleCat('police', 'КОПЫ', '#1e40af', this)" class="cat-btn bg-blue-800">👮 Копы</button> 
+                        <button onclick="toggleCat('restaurant', 'ЕДА', '#ef4444', this)" class="cat-btn bg-red-600">🍱 Еда</button>
+                        <button onclick="toggleCat('bus_stop', 'АВТО', '#64748b', this)" class="cat-btn bg-slate-500">🚌 Авто</button>
+                    </div>
+
+                    <button id="goBtn" onclick="buildRoadRoute()" class="btn-main w-full mt-6 p-5 rounded-2xl font-black text-xl uppercase italic shadow-xl transition-all active:scale-95">
+                        ПРОЛОЖИТЬ ПУТЬ 🚀
+                    </button>
+                </div>
+
+                <div id="list-card" class="glass-card p-6 hidden max-h-[150px] overflow-y-auto">
+                    <h3 class="text-xs font-black uppercase text-blue-500 mb-3 tracking-widest">Места по пути:</h3>
+                    <div id="res-list" class="space-y-2 text-[11px] font-bold border-l border-blue-200 pl-4 text-slate-700"></div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 space-y-4">
+                <div id="map"></div>
+
+                <div id="stats-panel" class="glass-card p-6 hidden flex justify-around items-center border-b-4 border-blue-400">
+                    <div class="text-center">
+                        <p class="text-[10px] font-black text-gray-400 uppercase">Дистанция</p>
+                        <p id="route-dist" class="text-3xl font-black text-slate-800 italic">0.0 км</p>
+                    </div>
+                    <div class="text-center">
+                        <p class="text-[10px] font-black text-gray-400 uppercase">Время</p>
+                        <p id="route-time" class="text-3xl font-black text-blue-600 italic">0 мин</p>
+                    </div>
+                    <button onclick="orderTaxi()" class="bg-yellow-400 text-black px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:scale-105 transition-all shadow-md">
+                        Заказать такси 🚕
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ГЕНЕРАЦИЯ СМАЙЛИКОВ НА ФОНЕ
+        const emojis = ['🎄', '🍪', '⛄', '🎅', '🎁', '❄️'];
+        const snowContainer = document.getElementById('snow-container');
+        for (let i = 0; i < 50; i++) {
+            const span = document.createElement('span');
+            span.className = 'tiny-emoji';
+            span.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+            span.style.left = Math.random() * 100 + 'vw';
+            span.style.top = Math.random() * 100 + 'vh';
+            span.style.fontSize = (Math.random() * 15 + 10) + 'px';
+            span.style.animationDelay = Math.random() * 10 + 's';
+            snowContainer.appendChild(span);
+        }
+
+        let map, routingControl, markers = [], userMarker, watchID = null;
+        let startCoords = null, endCoords = null;
+        let selectedCats = [{type:'tourism', label:'ГИД', color:'#3b82f6'}];
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false, attributionControl: false }).setView([42.87, 74.59], 13);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        }
+
+        function toggleGPS() {
+    const btn = document.getElementById('gpsBtn');
+    const input = document.getElementById('startInput');
+    
+    // ПЕРСОНАЖИ С ФОТОГРАФИЯМИ
+    const homeAloneHeroes = [
+        { 
+            name: 'Кевин', 
+            img: 'kevin.jpg' 
+        },
+        { 
+            name: 'Гарри', 
+            img: 'garry.jpg' 
+        },
+        { 
+            name: 'Марв', 
+            img: 'marv.jpg' 
+        },
+        {
+            name:'Олаф',
+            img:'олаф.jpg'
+        },
+        {
+            name:'Санта',
+            img:'santa.jpg'
+        },
+        
+         
+    ];
+    
+    // Выбираем случайного героя при каждом включении
+    const hero = homeAloneHeroes[Math.floor(Math.random() * homeAloneHeroes.length)];
+
+    if (watchID) {
+        // ВЫКЛЮЧЕНИЕ
+        navigator.geolocation.clearWatch(watchID); 
+        watchID = null;
+        btn.classList.replace('bg-blue-600', 'bg-blue-500'); 
+        input.value = "";
+        startCoords = null;
+        if (userMarker) map.removeLayer(userMarker);
+        userMarker = null;
+    } else {
+        // ВКЛЮЧЕНИЕ
+        btn.classList.replace('bg-blue-500', 'bg-blue-600'); 
+        input.value = "📍 Моё местоположение";
+        
+        watchID = navigator.geolocation.watchPosition(pos => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            startCoords = { lat, lon };
+            
+            // HTML код для маркера с фото
+            const markerHtml = `
+                <div class="avatar-container" style="position: relative;">
+                    <div class="user-avatar-img" style="background-image: url('${hero.img}');">
+                        <div class="char-name-tag">${hero.name}</div>
+                    </div>
+                </div>`;
+            
+            if (!userMarker) {
+                userMarker = L.marker([lat, lon], { 
+                    icon: L.divIcon({ 
+                        className: 'custom-photo-marker', 
+                        html: markerHtml,
+                        iconSize: [60, 60],
+                        iconAnchor: [30, 30]
+                    }) 
+                }).addTo(map);
+                map.setView([lat, lon], 15);
+            } else { 
+                userMarker.setLatLng([lat, lon]);
+            }
+        }, null, { enableHighAccuracy: true });
+    }
+}
+        function toggleCat(type, label, color, btn) {
+            const index = selectedCats.findIndex(c => c.type === type);
+            if (index > -1) { selectedCats.splice(index, 1); btn.classList.remove('active'); }
+            else { selectedCats.push({ type, label, color }); btn.classList.add('active'); }
+        }
+
+        async function getLatLon(query) {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+            const data = await res.json();
+            return data.length ? { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) } : null;
+        }
+
+        async function buildRoadRoute() {
+            const btn = document.getElementById('goBtn'); btn.innerText = "СТРОИМ... ✨";
+            const startVal = document.getElementById('startInput').value;
+            const endVal = document.getElementById('endInput').value;
+
+            if (routingControl) map.removeControl(routingControl);
+            markers.forEach(m => map.removeLayer(m)); markers = [];
+            document.getElementById('res-list').innerHTML = "";
+
+            let waypoints = [];
+
+            // ИСПРАВЛЕННАЯ ЛОГИКА: Если GPS включен, берем его координаты напрямую
+            let finalStart = null;
+            if (watchID && startCoords) {
+                finalStart = L.latLng(startCoords.lat, startCoords.lon);
+            } else {
+                const resStart = await getLatLon(startVal || "Бишкек");
+                if (resStart) finalStart = L.latLng(resStart.lat, resStart.lon);
+            }
+
+            if (finalStart) waypoints.push(finalStart);
+
+            // Поиск точек по пути
+            const basePoint = finalStart || {lat: 42.87, lng: 74.59};
+            for (let cat of selectedCats) {
+                const delta = 0.05;
+                const url = `https://nominatim.openstreetmap.org/search?format=json&q=${cat.type}&viewbox=${basePoint.lng-delta},${basePoint.lat+delta},${basePoint.lng+delta},${basePoint.lat-delta}&bounded=1&limit=3`;
+                try {
+                    const poiData = await (await fetch(url)).json();
+                    poiData.forEach(p => {
+                        const lat = parseFloat(p.lat), lon = parseFloat(p.lon);
+                        waypoints.push(L.latLng(lat, lon));
+                        const m = L.marker([lat, lon], {
+                            icon: L.divIcon({ className: 'label', html: `<div class="map-label" style="border-color:${cat.color}">${cat.label}</div>` })
+                        }).addTo(map);
+                        markers.push(m);
+                        document.getElementById('res-list').innerHTML += `<div><span style="color:${cat.color}">●</span> ${p.display_name.split(',')[0]}</div>`;
+                    });
+                } catch(e) {}
+            }
+
+            if (endVal) {
+                endCoords = await getLatLon(endVal);
+                if (endCoords) {
+                    waypoints.push(L.latLng(endCoords.lat, endCoords.lon));
+                    markers.push(L.marker([endCoords.lat, endCoords.lon], { icon: L.divIcon({ className: 'label', html: `<div class="map-label" style="background:#ef4444; color:white">ФИНИШ 🏁</div>` }) }).addTo(map));
+                }
+            }
+
+            if (waypoints.length > 1) {
+                routingControl = L.Routing.control({
+                    waypoints: waypoints,
+                    lineOptions: { styles: [{ color: '#3b82f6', opacity: 0.7, weight: 6 }] },
+                    createMarker: () => null,
+                    addWaypoints: false
+                }).on('routesfound', function(e) {
+                    const s = e.routes[0].summary;
+                    document.getElementById('stats-panel').classList.remove('hidden');
+                    document.getElementById('route-dist').innerText = (s.totalDistance / 1000).toFixed(1) + " км";
+                    document.getElementById('route-time').innerText = Math.round(s.totalTime / 60) + " мин";
+                }).addTo(map);
+            }
+
+            document.getElementById('list-card').classList.toggle('hidden', markers.length === 0);
+            btn.innerText = "ПУТЬ ГОТОВ! 🏎️";
+        }
+
+        function orderTaxi() {
+            if (!endCoords) return alert("Укажите Финиш!");
+            const lat = endCoords.lat, lon = endCoords.lon;
+            const destName = encodeURIComponent(document.getElementById('endInput').value || "Финиш");
+            const isCIS = confirm("Вы в СНГ? (OK - Яндекс Go, Отмена - Uber)");
+            if (isCIS) {
+                window.open(`https://3.redirect.appmetrica.yandex.com/route?end-lat=${lat}&end-lon=${lon}&text=${destName}&ref=nomadgo&appmetrica_tracking_id=1178268795219780156`, '_blank');
+            } else {
+                window.open(`https://m.uber.com/ul/?action=setPickup&dropoff[latitude]=${lat}&dropoff[longitude]=${lon}&dropoff[nickname]=${destName}`, '_blank');
+            }
+        }
+
+        window.onload = initMap;
+    </script>
+
+    <style>
+    .user-avatar-img {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 3px solid #ef4444;
+    background-size: cover;
+    background-position: center;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+    position: relative;
+    transition: transform 0.3s;
+}
+
+/* Имя персонажа под фото */
+.char-name-tag {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ef4444;
+    color: white;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 900;
+    white-space: nowrap;
+    text-shadow: 1px 1px 2px black;
+}
+
+/* Эффект пульсации вокруг фото */
+.avatar-container::before {
+    content: '';
+    position: absolute;
+    top: -5px; left: -5px; right: -5px; bottom: -5px;
+    border-radius: 50%;
+    border: 2px solid #3b82f6;
+    animation: pulse-ring 1.5s infinite;
+}
+
+@keyframes pulse-ring {
+    0% { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+}
+
+
+    </style>
+</body>
+
+</html>
